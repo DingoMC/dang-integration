@@ -8,7 +8,7 @@ from models.skarpa.bouldering_score import BoulderingScore
 from models.skarpa.season_score import SeasonScore
 import asyncio
 
-VERSION = '0.2.0'
+VERSION = '0.3.0'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.season_score'
 INTERVAL = 600
@@ -18,17 +18,32 @@ print('Loaded Python Module: ' + __name__ + ', using version: ' + VERSION)
 
 def updatePlace(season_scores : list[dict]):
     new_scores = sorted(season_scores, key=lambda ls: float(ls['p200']), reverse=True)
+    out = 0
     for i in range(0, len(new_scores)):
-        new_scores[i].update({"place": int(i+1)})
+        if bool(new_scores[i]['in_council']) == True:
+            new_scores[i].update({"place": int(i+1-out)})
+        else:
+            out += 1
+            new_scores[i].update({"place": int(-1)})
     return new_scores
 
 def updatePlaceG(season_scores : list[dict]):
     scores_women = sorted([l for l in season_scores if bool(l['gender']) == False], key=lambda ls: float(ls['p200']), reverse=True)
     scores_men = sorted([l for l in season_scores if bool(l['gender']) == True], key=lambda ls: float(ls['p200']), reverse=True)
+    out_w = 0
+    out_m = 0
     for i in range(0, len(scores_women)):
-        scores_women[i].update({"place_g": int(i+1)})
+        if bool(scores_women[i]['in_council']) == True:
+            scores_women[i].update({"place_g": int(i+1-out_w)})
+        else:
+            out_w += 1
+            scores_women[i].update({"place_g": int(-1)})
     for i in range(0, len(scores_men)):
-        scores_men[i].update({"place_g": int(i+1)})
+        if bool(scores_men[i]['in_council']) == True:
+            scores_men[i].update({"place_g": int(i+1-out_m)})
+        else:
+            out_m += 1
+            scores_men[i].update({"place_g": int(-1)})
     return scores_women + scores_men
 
 def checkTrigger():
@@ -38,7 +53,7 @@ def checkTrigger():
     return bool(trigger[0][0])
 
 def updater():
-    users = User.select(['id', 'gender'])
+    users = User.select(['id', 'gender', 'in_council'])
     seasons = Season.select(['id'])
     for s in seasons:
         s_scores : list[dict] = []
@@ -54,7 +69,7 @@ def updater():
                     total_p200 += float(sdata[0][0])
                 if len(bdata) > 0:
                     total_p200 += float(bdata[0][0]) 
-                s_scores.append({"user_id": u[0], "gender": bool(u[1]), "season_id": s[0], "p200": total_p200})
+                s_scores.append({"user_id": u[0], "gender": bool(u[1]), "in_council": bool(u[2]), "season_id": s[0], "p200": total_p200})
         s_scores = updatePlace(s_scores)
         s_scores = updatePlaceG(s_scores)
         for ss in s_scores:

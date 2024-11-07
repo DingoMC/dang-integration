@@ -9,7 +9,7 @@ from utils.linreg import LinearRegression
 from dingorm import ExecuteSkarpaSQLUpdate
 import asyncio
 
-VERSION = '0.3.1'
+VERSION = '0.4.1'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.speed_score'
 INTERVAL = 600
@@ -22,30 +22,48 @@ def updateP200(speed_scores : list[dict]):
     new_scores = speed_scores
     min_time = 99999.99
     for s in speed_scores:
-        if s['avg'] is not None and float(s['avg']) < min_time:
+        if s['avg'] is not None and bool(s['in_council']) == True and float(s['avg']) < min_time:
             min_time = float(s['avg'])
     for i in range(0, len(new_scores)):
         if new_scores[i]['avg'] is not None:
             score = float(new_scores[i]['avg'])
             att_coeff = float(new_scores[i]['att_coeff'])
-            new_scores[i].update({"p200": att_coeff * 200.0 * min_time / score})
+            if bool(new_scores[i]['in_council']) == True:
+                new_scores[i].update({"p200": att_coeff * 200.0 * min_time / score})
+            else:
+                new_scores[i].update({"p200": 0.0})
         else:
             new_scores[i].update({"p200": 0.0})
     return new_scores
 
 def updatePlace(speed_scores : list[dict]):
     new_scores = sorted(speed_scores, key=lambda ls: float(ls['p200']), reverse=True)
+    out = 0
     for i in range(0, len(new_scores)):
-        new_scores[i].update({"place": int(i+1)})
+        if bool(new_scores[i]['in_council']) == True:
+            new_scores[i].update({"place": int(i+1-out)})
+        else:
+            out += 1
+            new_scores[i].update({"place": int(-1)})
     return new_scores
 
 def updatePlaceG(speed_scores : list[dict]):
     scores_women = sorted([l for l in speed_scores if bool(l['gender']) == False], key=lambda ls: float(ls['p200']), reverse=True)
     scores_men = sorted([l for l in speed_scores if bool(l['gender']) == True], key=lambda ls: float(ls['p200']), reverse=True)
+    out_w = 0
+    out_m = 0
     for i in range(0, len(scores_women)):
-        scores_women[i].update({"place_g": int(i+1)})
+        if bool(scores_women[i]['in_council']) == True:
+            scores_women[i].update({"place_g": int(i+1-out_w)})
+        else:
+            out_w += 1
+            scores_women[i].update({"place_g": int(-1)})
     for i in range(0, len(scores_men)):
-        scores_men[i].update({"place_g": int(i+1)})
+        if bool(scores_men[i]['in_council']) == True:
+            scores_men[i].update({"place_g": int(i+1-out_m)})
+        else:
+            out_m += 1
+            scores_men[i].update({"place_g": int(-1)})
     return scores_women + scores_men
 
 def countDataColumn(raw_sdata : list[list], columnIndex: int, condition: int):
@@ -77,7 +95,7 @@ def checkTrigger():
 def updater():
     # Execute raw query updating averages for each day
     ExecuteSkarpaSQLUpdate('UPDATE "SpeedDayScore" SET average = CASE WHEN (time_a IS NULL AND time_b IS NULL) THEN NULL WHEN (time_a IS NULL) THEN time_b WHEN (time_b IS NULL) THEN time_a ELSE (time_a + time_b) / 2.0 END')
-    users = User.select(['id', 'gender'])
+    users = User.select(['id', 'gender', 'in_council'])
     speed_comps = Competition.select(filter=['id'], where={"type": "s"})
     for sc in speed_comps:
         speed_scores : list[dict] = []
@@ -103,7 +121,7 @@ def updater():
                 att_coeff = calculateUserAtt(t_count, c_count, max_trains, max_comps)
                 progress_data = generateProgressData(data)
                 linreg = LinearRegression(progress_data)
-                temp = {"user_id": u[0], "gender": bool(u[1]), "competition_id": sc[0], "trains": t_count, "comps": c_count, "att_coeff": att_coeff, "avg": avg}
+                temp = {"user_id": u[0], "gender": bool(u[1]), "in_council": bool(u[2]), "competition_id": sc[0], "trains": t_count, "comps": c_count, "att_coeff": att_coeff, "avg": avg}
                 if linreg is not None:
                     temp.update({"progress": -linreg.byx})
                 else:

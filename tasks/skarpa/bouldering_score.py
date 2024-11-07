@@ -8,7 +8,7 @@ from utils.linreg import LinearRegression
 from dingorm import ExecuteSkarpaSQLUpdate, ExecuteSkarpaSQL
 import asyncio
 
-VERSION = '0.2.0'
+VERSION = '0.3.0'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.bouldering_score'
 INTERVAL = 600
@@ -18,27 +18,45 @@ def updateP200(bouldering_scores : list[dict]):
     new_scores = bouldering_scores
     max_score = 0.0
     for s in bouldering_scores:
-        if s['score_m'] is not None and float(s['score_m']) > max_score:
+        if s['score_m'] is not None and bool(s['in_council']) == True and float(s['score_m']) > max_score:
             max_score = float(s['score_m'])
     for i in range(0, len(new_scores)):
         if new_scores[i]['score_m'] is not None:
-            score = float(new_scores[i]['score_m'])
-            new_scores[i].update({"p200": score * 200.0 / max_score})
+            if bool(new_scores[i]['in_council']) == True:
+                score = float(new_scores[i]['score_m'])
+                new_scores[i].update({"p200": score * 200.0 / max_score})
+            else:
+                new_scores[i].update({"p200": 0.0})
     return new_scores
 
 def updatePlace(bouldering_scores : list[dict]):
     new_scores = sorted(bouldering_scores, key=lambda ls: float(ls['score_m']), reverse=True)
+    out = 0
     for i in range(0, len(new_scores)):
-        new_scores[i].update({"place": int(i+1)})
+        if bool(new_scores[i]['in_council']) == True:
+            new_scores[i].update({"place": int(i+1-out)})
+        else:
+            out += 1
+            new_scores[i].update({"place": int(-1)})
     return new_scores
 
 def updatePlaceG(bouldering_scores : list[dict]):
     scores_women = sorted([l for l in bouldering_scores if bool(l['gender']) == False], key=lambda ls: float(ls['score_m']), reverse=True)
     scores_men = sorted([l for l in bouldering_scores if bool(l['gender']) == True], key=lambda ls: float(ls['score_m']), reverse=True)
+    out_w = 0
+    out_m = 0
     for i in range(0, len(scores_women)):
-        scores_women[i].update({"place_g": int(i+1)})
+        if bool(scores_women[i]['in_council']) == True:
+            scores_women[i].update({"place_g": int(i+1-out_w)})
+        else:
+            out_w += 1
+            scores_women[i].update({"place_g": int(-1)})
     for i in range(0, len(scores_men)):
-        scores_men[i].update({"place_g": int(i+1)})
+        if bool(scores_men[i]['in_council']) == True:
+            scores_men[i].update({"place_g": int(i+1-out_m)})
+        else:
+            out_m += 1
+            scores_men[i].update({"place_g": int(-1)})
     return scores_women + scores_men
 
 def generateProgressData(raw_bdata : list[list]):
@@ -79,7 +97,7 @@ def updater():
             bwd,
             ['boulder_week_id', 'user_id']
         )
-    users = User.select(['id', 'gender'])
+    users = User.select(['id', 'gender', 'in_council'])
     bouldering_comps = Competition.select(filter=['id'], where={"type": "b"})
     for bc in bouldering_comps:
         b_scores : list[dict] = []
@@ -93,7 +111,7 @@ def updater():
                 progress_data = generateProgressData(data)
                 linreg = LinearRegression(progress_data)
                 temp = {
-                    "user_id": u[0], "gender": bool(u[1]), "competition_id": bc[0],
+                    "user_id": u[0], "gender": bool(u[1]), "in_council": bool(u[2]), "competition_id": bc[0],
                     "score": sumDataColumn(data, 1),
                     "score_m": sumDataColumn(data, 2),
                     "tops": int(sumDataColumn(data, 3)),

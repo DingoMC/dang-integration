@@ -6,7 +6,7 @@ from models.skarpa.lead_score import LeadScore
 from models.skarpa.lead_route_score import LeadRouteScore
 import asyncio
 
-VERSION = '0.2.1'
+VERSION = '0.3.1'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.lead_score'
 INTERVAL = 600
@@ -45,27 +45,45 @@ def updateP200(lead_scores : list[dict]):
     new_scores = lead_scores
     max_score = 0.0
     for s in lead_scores:
-        if s['score'] is not None and float(s['score']) > max_score:
+        if s['score'] is not None and bool(s['in_council']) == True and float(s['score']) > max_score:
             max_score = float(s['score'])
     for i in range(0, len(new_scores)):
         if new_scores[i]['score'] is not None:
             score = float(new_scores[i]['score'])
-            new_scores[i].update({"p200": score * 200.0 / max_score})
+            if bool(new_scores[i]['in_council']) == True:
+                new_scores[i].update({"p200": score * 200.0 / max_score})
+            else:
+                new_scores[i].update({"p200": 0})
     return new_scores
 
 def updatePlace(lead_scores : list[dict]):
     new_scores = sorted(lead_scores, key=lambda ls: float(ls['score']), reverse=True)
+    out = 0
     for i in range(0, len(new_scores)):
-        new_scores[i].update({"place": int(i+1)})
+        if bool(new_scores[i]['in_council']) == True:
+            new_scores[i].update({"place": int(i+1-out)})
+        else:
+            out += 1
+            new_scores[i].update({"place": int(-1)})
     return new_scores
 
 def updatePlaceG(lead_scores : list[dict]):
     scores_women = sorted([l for l in lead_scores if bool(l['gender']) == False], key=lambda ls: float(ls['score']), reverse=True)
     scores_men = sorted([l for l in lead_scores if bool(l['gender']) == True], key=lambda ls: float(ls['score']), reverse=True)
+    out_w = 0
+    out_m = 0
     for i in range(0, len(scores_women)):
-        scores_women[i].update({"place_g": int(i+1)})
+        if bool(scores_women[i]['in_council']) == True:
+            scores_women[i].update({"place_g": int(i+1-out_w)})
+        else:
+            out_w += 1
+            scores_women[i].update({"place_g": int(-1)})
     for i in range(0, len(scores_men)):
-        scores_men[i].update({"place_g": int(i+1)})
+        if bool(scores_men[i]['in_council']) == True:
+            scores_men[i].update({"place_g": int(i+1-out_m)})
+        else:
+            out_m += 1
+            scores_men[i].update({"place_g": int(-1)})
     return scores_women + scores_men
 
 def checkTrigger():
@@ -75,7 +93,7 @@ def checkTrigger():
     return bool(trigger[0][0])
 
 def updater():
-    users = User.select(['id', 'gender'])
+    users = User.select(['id', 'gender', 'in_council'])
     lead_comps = Competition.select(filter=['id'], where={"type": "l"})
     for lc in lead_comps:
         lead_scores : list[dict] = []
@@ -86,7 +104,7 @@ def updater():
                 join=['LeadRoute'])
             if len(data) > 0:
                 score = calculateUserScore(data)
-                lead_scores.append({"user_id": u[0], "gender": bool(u[1]), "competition_id": lc[0], "score": score})
+                lead_scores.append({"user_id": u[0], "gender": bool(u[1]), "in_council": bool(u[2]), "competition_id": lc[0], "score": score})
         lead_scores = updateP200(lead_scores)
         lead_scores = updatePlace(lead_scores)
         lead_scores = updatePlaceG(lead_scores)
