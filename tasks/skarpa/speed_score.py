@@ -105,9 +105,11 @@ def updater():
         )
         max_trains = 0
         max_comps = 0
-        if len(max_data) > 0:
-            max_trains = int(max_data[0][0])
-            max_comps = int(max_data[0][1])
+        if len(max_data) > 0 and len(max_data[0]) > 1:
+            if max_data[0][0] is not None:
+                max_trains = int(max_data[0][0])
+            if max_data[0][1] is not None:
+                max_comps = int(max_data[0][1])
         for u in users:
             data = SpeedDayScore.select(
                 filter=['sd.progress_x', 'sds.average', 'CAST(sd.is_comp AS INTEGER)'],
