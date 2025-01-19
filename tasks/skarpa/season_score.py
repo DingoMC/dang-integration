@@ -8,7 +8,7 @@ from models.skarpa.bouldering_score import BoulderingScore
 from models.skarpa.season_score import SeasonScore
 import asyncio
 
-VERSION = '0.3.0'
+VERSION = '0.4.0'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.season_score'
 INTERVAL = 600
@@ -58,25 +58,29 @@ def updater():
     for s in seasons:
         s_scores : list[dict] = []
         for u in users:
-            ldata = LeadScore.select(['ls.p200'], {"ls.user_id": u[0], "s.id": s[0]}, ['Competition', 'Season'])
-            sdata = SpeedScore.select(['ss.p200'], {"ss.user_id": u[0], "s.id": s[0]}, ['Competition', 'Season'])
-            bdata = BoulderingScore.select(['blds.p200'], {"blds.user_id": u[0], "s.id": s[0]}, ['Competition', 'Season'])
+            ldata = LeadScore.select(['ls.p200', 'ls.p200_generic'], {"ls.user_id": u[0], "s.id": s[0]}, ['Competition', 'Season'])
+            sdata = SpeedScore.select(['ss.p200', 'ss.p200_generic'], {"ss.user_id": u[0], "s.id": s[0]}, ['Competition', 'Season'])
+            bdata = BoulderingScore.select(['blds.p200', 'blds.p200_generic'], {"blds.user_id": u[0], "s.id": s[0]}, ['Competition', 'Season'])
             if len(ldata) > 0 or len(sdata) > 0 or len(bdata) > 0:
                 total_p200 = 0.0
+                total_p200_generic = 0.0
                 if len(ldata) > 0:
                     total_p200 += float(ldata[0][0])
+                    total_p200_generic += float(ldata[0][1])
                 if len(sdata) > 0:
                     total_p200 += float(sdata[0][0])
+                    total_p200_generic += float(sdata[0][1])
                 if len(bdata) > 0:
-                    total_p200 += float(bdata[0][0]) 
-                s_scores.append({"user_id": u[0], "gender": bool(u[1]), "in_council": bool(u[2]), "season_id": s[0], "p200": total_p200})
+                    total_p200 += float(bdata[0][0])
+                    total_p200_generic += float(bdata[0][1])
+                s_scores.append({"user_id": u[0], "gender": bool(u[1]), "in_council": bool(u[2]), "season_id": s[0], "p200": total_p200, "p200_generic": total_p200_generic})
         s_scores = updatePlace(s_scores)
         s_scores = updatePlaceG(s_scores)
         for ss in s_scores:
             SeasonScore.upsert(
-                {"p200": ss['p200'], "place": ss['place'], "place_g": ss['place_g']},
-                ['user_id', 'season_id', 'p200', 'place', 'place_g'],
-                [ss['user_id'], ss['season_id'], ss['p200'], ss['place'], ss['place_g']],
+                {"p200": ss['p200'], "p200_generic": ss['p200_generic'], "place": ss['place'], "place_g": ss['place_g']},
+                ['user_id', 'season_id', 'p200', 'p200_generic', 'place', 'place_g'],
+                [ss['user_id'], ss['season_id'], ss['p200'], ss['p200_generic'], ss['place'], ss['place_g']],
                 ['user_id', 'season_id']
             )
     RecalcTrigger.updateRow({"value": "false", "updated_at": "NOW()"}, {"type": "season"})

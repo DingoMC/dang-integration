@@ -8,7 +8,7 @@ from utils.linreg import LinearRegression
 from dingorm import ExecuteSkarpaSQLUpdate, ExecuteSkarpaSQL
 import asyncio
 
-VERSION = '0.3.0'
+VERSION = '0.4.0'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.bouldering_score'
 INTERVAL = 600
@@ -27,6 +27,18 @@ def updateP200(bouldering_scores : list[dict]):
                 new_scores[i].update({"p200": score * 200.0 / max_score})
             else:
                 new_scores[i].update({"p200": 0.0})
+    return new_scores
+
+def updateP200Generic(bouldering_scores : list[dict]):
+    new_scores = bouldering_scores
+    max_score = 0.0
+    for s in bouldering_scores:
+        if s['score_m'] is not None and float(s['score_m']) > max_score:
+            max_score = float(s['score_m'])
+    for i in range(0, len(new_scores)):
+        if new_scores[i]['score_m'] is not None:
+            score = float(new_scores[i]['score_m'])
+            new_scores[i].update({"p200_generic": score * 200.0 / max_score})
     return new_scores
 
 def updatePlace(bouldering_scores : list[dict]):
@@ -123,13 +135,14 @@ def updater():
                     temp.update({"progress": 0.0})
                 b_scores.append(temp)
         b_scores = updateP200(b_scores)
+        b_scores = updateP200Generic(b_scores)
         b_scores = updatePlace(b_scores)
         b_scores = updatePlaceG(b_scores)
         for bs in b_scores:
             BoulderingScore.upsert(
-                {"flashes": bs['flashes'], "tops": bs['tops'], "score": bs['score'], "progress": bs['progress'], "score_m": bs['score_m'], "p200": bs['p200'], "place_g": bs['place_g'], "place": bs['place']},
-                ['user_id', 'competition_id', 'flashes', 'tops', 'score', 'progress', 'score_m', 'p200', 'place_g', 'place'],
-                [bs['user_id'], bs['competition_id'], bs['flashes'], bs['tops'], bs['score'], bs['progress'], bs['score_m'], bs['p200'], bs['place_g'], bs['place']],
+                {"flashes": bs['flashes'], "tops": bs['tops'], "score": bs['score'], "progress": bs['progress'], "score_m": bs['score_m'], "p200": bs['p200'], "p200_generic": bs['p200_generic'], "place_g": bs['place_g'], "place": bs['place']},
+                ['user_id', 'competition_id', 'flashes', 'tops', 'score', 'progress', 'score_m', 'p200', 'p200_generic', 'place_g', 'place'],
+                [bs['user_id'], bs['competition_id'], bs['flashes'], bs['tops'], bs['score'], bs['progress'], bs['score_m'], bs['p200'], bs['p200_generic'], bs['place_g'], bs['place']],
                 ['user_id', 'competition_id']
             )
     RecalcTrigger.updateRow({"value": "false", "updated_at": "NOW()"}, {"type": "bouldering"})

@@ -4,7 +4,7 @@ from models.skarpa.user import User
 from dingorm import ExecuteSkarpaSQL
 import asyncio
 
-VERSION = '0.3.0'
+VERSION = '0.4.0'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.general_score'
 INTERVAL = 600
@@ -39,13 +39,13 @@ def checkTrigger():
 
 def updater():
     # Custom Fetch summed up P200 for each user
-    data = ExecuteSkarpaSQL('SELECT SUM(ss.p200), ss.user_id, u.gender, u.in_council FROM public."SeasonScore" ss LEFT JOIN public."User" u ON u.id = ss.user_id GROUP BY ss.user_id, u.gender, u.in_council')
+    data = ExecuteSkarpaSQL('SELECT SUM(ss.p200), SUM(ss.p200_generic), ss.user_id, u.gender, u.in_council FROM public."SeasonScore" ss LEFT JOIN public."User" u ON u.id = ss.user_id GROUP BY ss.user_id, u.gender, u.in_council')
     gdata : list[dict] = []
     for d in data:
-        gdata.append({"p200": d[0], "user_id": d[1], "gender": d[2], "in_council": d[3]})
+        gdata.append({"p200": d[0], "p200_generic": d[1], "user_id": d[2], "gender": d[3], "in_council": d[4]})
     gdata = updatePlaceG(gdata)
     for g in gdata:
-        User.updateRow({"p200": g['p200'], "place": g['place_g']}, {"id": g['user_id']})
+        User.updateRow({"p200": g['p200'], "p200_generic": g['p200_generic'], "place": g['place_g']}, {"id": g['user_id']})
     RecalcTrigger.updateRow({"value": "false", "updated_at": "NOW()"}, {"type": "general"})
 
 async def interval():

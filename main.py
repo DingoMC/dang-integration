@@ -13,7 +13,7 @@ import tasks.skarpa.season_score as sses
 import tasks.skarpa.general_score as sgs
 from utils.console import ThreadInitializing, ProgramExit, ProgramInit, InitBox
 
-VERSION = "0.2.9"
+VERSION = "0.3.9"
 
 # Tasks class
 class DangTask:

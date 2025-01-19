@@ -9,7 +9,7 @@ from utils.linreg import LinearRegression
 from dingorm import ExecuteSkarpaSQLUpdate
 import asyncio
 
-VERSION = '0.4.1'
+VERSION = '0.5.1'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.speed_score'
 INTERVAL = 600
@@ -34,6 +34,21 @@ def updateP200(speed_scores : list[dict]):
                 new_scores[i].update({"p200": 0.0})
         else:
             new_scores[i].update({"p200": 0.0})
+    return new_scores
+
+def updateP200Generic(speed_scores : list[dict]):
+    new_scores = speed_scores
+    min_time = 99999.99
+    for s in speed_scores:
+        if s['avg'] is not None and float(s['avg']) < min_time:
+            min_time = float(s['avg'])
+    for i in range(0, len(new_scores)):
+        if new_scores[i]['avg'] is not None:
+            score = float(new_scores[i]['avg'])
+            att_coeff = float(new_scores[i]['att_coeff'])
+            new_scores[i].update({"p200_generic": att_coeff * 200.0 * min_time / score})
+        else:
+            new_scores[i].update({"p200_generic": 0.0})
     return new_scores
 
 def updatePlace(speed_scores : list[dict]):
@@ -130,13 +145,14 @@ def updater():
                     temp.update({"progress": 0.0})
                 speed_scores.append(temp)
         speed_scores = updateP200(speed_scores)
+        speed_scores = updateP200Generic(speed_scores)
         speed_scores = updatePlace(speed_scores)
         speed_scores = updatePlaceG(speed_scores)
         for ss in speed_scores:
             SpeedScore.upsert(
-                {"trains": ss['trains'], "comps": ss['comps'], "att_coeff": ss['att_coeff'], "average": ss['avg'], "progress": ss['progress'], "p200": ss['p200'], "place": ss['place'], "place_g": ss['place_g']},
-                ['trains', 'comps', 'att_coeff', 'average', 'progress', 'p200', 'place', 'place_g', 'user_id', 'competition_id'],
-                [ss['trains'], ss['comps'], ss['att_coeff'], ss['avg'], ss['progress'], ss['p200'], ss['place'], ss['place_g'], ss['user_id'], ss['competition_id']],
+                {"trains": ss['trains'], "comps": ss['comps'], "att_coeff": ss['att_coeff'], "average": ss['avg'], "progress": ss['progress'], "p200": ss['p200'], "p200_generic": ss['p200_generic'], "place": ss['place'], "place_g": ss['place_g']},
+                ['trains', 'comps', 'att_coeff', 'average', 'progress', 'p200', 'p200_generic', 'place', 'place_g', 'user_id', 'competition_id'],
+                [ss['trains'], ss['comps'], ss['att_coeff'], ss['avg'], ss['progress'], ss['p200'], ss['p200_generic'], ss['place'], ss['place_g'], ss['user_id'], ss['competition_id']],
                 ['user_id', 'competition_id']
             )
     RecalcTrigger.updateRow({"value": "false", "updated_at": "NOW()"}, {"type": "speed"})

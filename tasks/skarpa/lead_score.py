@@ -6,7 +6,7 @@ from models.skarpa.lead_score import LeadScore
 from models.skarpa.lead_route_score import LeadRouteScore
 import asyncio
 
-VERSION = '0.3.1'
+VERSION = '0.4.1'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.lead_score'
 INTERVAL = 600
@@ -54,6 +54,18 @@ def updateP200(lead_scores : list[dict]):
                 new_scores[i].update({"p200": score * 200.0 / max_score})
             else:
                 new_scores[i].update({"p200": 0})
+    return new_scores
+
+def updateP200Generic(lead_scores : list[dict]):
+    new_scores = lead_scores
+    max_score = 0.0
+    for s in lead_scores:
+        if s['score'] is not None and float(s['score']) > max_score:
+            max_score = float(s['score'])
+    for i in range(0, len(new_scores)):
+        if new_scores[i]['score'] is not None:
+            score = float(new_scores[i]['score'])
+            new_scores[i].update({"p200_generic": score * 200.0 / max_score})
     return new_scores
 
 def updatePlace(lead_scores : list[dict]):
@@ -106,13 +118,14 @@ def updater():
                 score = calculateUserScore(data)
                 lead_scores.append({"user_id": u[0], "gender": bool(u[1]), "in_council": bool(u[2]), "competition_id": lc[0], "score": score})
         lead_scores = updateP200(lead_scores)
+        lead_scores = updateP200Generic(lead_scores)
         lead_scores = updatePlace(lead_scores)
         lead_scores = updatePlaceG(lead_scores)
         for ls in lead_scores:
             LeadScore.upsert(
-                {"score": ls['score'], "p200": ls['p200'], "place": ls['place'], "place_g": ls['place_g']},
-                ['score', 'p200', 'place_g', 'place', 'user_id', 'competition_id'],
-                [ls['score'], ls['p200'], ls['place_g'], ls['place'], ls['user_id'], ls['competition_id']],
+                {"score": ls['score'], "p200": ls['p200'], "p200_generic": ls['p200_generic'], "place": ls['place'], "place_g": ls['place_g']},
+                ['score', 'p200', 'p200_generic', 'place_g', 'place', 'user_id', 'competition_id'],
+                [ls['score'], ls['p200'], ls['p200_generic'], ls['place_g'], ls['place'], ls['user_id'], ls['competition_id']],
                 ['user_id', 'competition_id']
             )
     RecalcTrigger.updateRow({"value": "false", "updated_at": "NOW()"}, {"type": "lead"})
