@@ -92,7 +92,15 @@ def checkTrigger():
 
 def updater():
     # Execute raw query updating relative difficulty for each boulder
-    ExecuteSkarpaSQLUpdate('UPDATE public."Boulder" b SET relative_diff = (CAST(b.level AS FLOAT) / CAST(bw.boulder_count AS FLOAT)) FROM public."BoulderWeek" bw WHERE bw.id = b.boulder_week_id;')
+    ExecuteSkarpaSQLUpdate("""
+        UPDATE public."Boulder" b1 SET relative_diff = (CAST(b1.level AS FLOAT) / CAST((
+            SELECT COUNT(*) FROM public."Boulder" b2
+                WHERE (b1.category_begin_id IS NULL OR b2.category_end_id IS NULL OR b2.category_end_id <= b1.category_begin_id)
+                AND (b1.category_end_id IS NULL OR b2.category_begin_id IS NULL OR b2.category_begin_id >= b1.category_end_id)
+                AND b1.boulder_week_id = b2.boulder_week_id
+            ) AS FLOAT))
+        FROM public."BoulderWeek" bw
+        WHERE bw.id = b1.boulder_week_id""")
     # Execute raw query updating true difficulty for each boulder
     ExecuteSkarpaSQLUpdate('WITH x AS (SELECT boulder_id, ((3.0 * COUNT(score) - SUM(score)) / (3.0 * COUNT(score))) AS true_diff FROM public."BoulderScore" GROUP BY boulder_id) UPDATE public."Boulder" b SET true_diff = x.true_diff FROM x WHERE b.id = x.boulder_id')
     # Execute raw query updating difficulty coefficient for each boulder
