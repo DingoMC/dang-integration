@@ -8,7 +8,7 @@ from utils.linreg import LinearRegression
 from dingorm import ExecuteSkarpaSQLUpdate, ExecuteSkarpaSQL
 import asyncio
 
-VERSION = '0.4.0'
+VERSION = '0.5.0'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.bouldering_score'
 INTERVAL = 600
@@ -91,6 +91,12 @@ def checkTrigger():
     return bool(trigger[0][0])
 
 def updater():
+    # Execute raw query updating is_top and is_flash columns
+    ExecuteSkarpaSQLUpdate("""
+        UPDATE public."BoulderScore"
+        SET score = (CASE WHEN is_flash = TRUE THEN b.flash_score WHEN is_top = TRUE THEN b.top_score ELSE 0 END)
+        FROM public."Boulder" b
+        WHERE public."BoulderScore".boulder_id = b.id""")
     # Execute raw query updating relative difficulty for each boulder
     ExecuteSkarpaSQLUpdate("""
         UPDATE public."Boulder" b1 SET relative_diff = (CAST(b1.level AS FLOAT) / CAST((
@@ -102,11 +108,17 @@ def updater():
         FROM public."BoulderWeek" bw
         WHERE bw.id = b1.boulder_week_id""")
     # Execute raw query updating true difficulty for each boulder
-    ExecuteSkarpaSQLUpdate('WITH x AS (SELECT boulder_id, ((3.0 * COUNT(score) - SUM(score)) / (3.0 * COUNT(score))) AS true_diff FROM public."BoulderScore" GROUP BY boulder_id) UPDATE public."Boulder" b SET true_diff = x.true_diff FROM x WHERE b.id = x.boulder_id')
+    ExecuteSkarpaSQLUpdate("""
+        WITH x AS (
+            SELECT bs.boulder_id, ((b.flash_score * COUNT(bs.score) - SUM(bs.score)) / (b.flash_score * COUNT(bs.score))) AS true_diff
+            FROM public."BoulderScore" bs
+            JOIN public."Boulder" b ON b.id = bs.boulder_id
+            GROUP BY bs.boulder_id, b.flash_score
+        ) UPDATE public."Boulder" bld
+        SET true_diff = x.true_diff
+        FROM x WHERE bld.id = x.boulder_id""")
     # Execute raw query updating difficulty coefficient for each boulder
     ExecuteSkarpaSQLUpdate('WITH x AS (SELECT boulder_week_id, relative_diff AS diff1 FROM public."Boulder" WHERE level = 1) UPDATE public."Boulder" b SET diff_coeff = (1.0 + LN(1.0 - x.diff1 + (b.relative_diff + b.true_diff) * 0.5)) FROM x WHERE x.boulder_week_id = b.boulder_week_id')
-    # Execute raw query updating is_top and is_flash columns
-    ExecuteSkarpaSQLUpdate('UPDATE public."BoulderScore" SET is_top = (score >= 1), is_flash = (score = 3)')
     # Execute raw query to calculate boulder week score data
     bw_data = ExecuteSkarpaSQL('SELECT b.boulder_week_id, bs.user_id, SUM(bs.score) AS score, SUM((bs.score * b.diff_coeff)) AS score_m, SUM(CAST(bs.is_top AS INTEGER)) AS tops, SUM(CAST(bs.is_flash AS INTEGER)) AS flashes FROM public."BoulderScore" bs LEFT JOIN public."Boulder" b ON bs.boulder_id = b.id GROUP BY b.boulder_week_id, bs.user_id')
     # Upsert BoulderWeekScore Table
