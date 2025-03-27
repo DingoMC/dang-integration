@@ -84,6 +84,13 @@ def sumDataColumn(raw_bdata : list[list], columnIndex: int):
         sum += float(d[columnIndex])
     return sum
 
+def maxDataColumn(raw_bdata : list[list], columnIndex: int):
+    max = 0.0
+    for d in raw_bdata:
+        if float(d[columnIndex]) > max:
+            max = float(d[columnIndex])
+    return max
+
 def checkTrigger():
     trigger = RecalcTrigger.select(filter=['value'],where={"type": "bouldering"})
     if len(trigger) == 0:
@@ -150,7 +157,7 @@ def updater():
                     "flashes": int(sumDataColumn(data, 4))
                 }
                 if linreg is not None:
-                    temp.update({"progress": linreg.byx})
+                    temp.update({"progress": linreg.byx / maxDataColumn(data, 2)})
                 else:
                     temp.update({"progress": 0.0})
                 b_scores.append(temp)
