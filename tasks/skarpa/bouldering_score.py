@@ -8,7 +8,7 @@ from utils.linreg import LinearRegression
 from dingorm import ExecuteSkarpaSQLUpdate, ExecuteSkarpaSQL
 import asyncio
 
-VERSION = '0.5.0'
+VERSION = '0.5.2'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.bouldering_score'
 INTERVAL = 600
@@ -98,10 +98,10 @@ def checkTrigger():
     return bool(trigger[0][0])
 
 def updater():
-    # Execute raw query updating is_top and is_flash columns
+    # Execute raw query updating score by is_top, is_flash or is_zone
     ExecuteSkarpaSQLUpdate("""
         UPDATE public."BoulderScore"
-        SET score = (CASE WHEN is_flash = TRUE THEN b.flash_score WHEN is_top = TRUE THEN b.top_score ELSE 0 END)
+        SET score = (CASE WHEN is_flash = TRUE THEN b.flash_score WHEN is_top = TRUE THEN b.top_score WHEN (is_zone = TRUE AND b.zone_score IS NOT NULL) THEN b.zone_score ELSE 0 END)
         FROM public."Boulder" b
         WHERE public."BoulderScore".boulder_id = b.id""")
     # Execute raw query updating relative difficulty for each boulder
