@@ -8,7 +8,7 @@ from utils.linreg import LinearRegression
 from dingorm import ExecuteSkarpaSQLUpdate, ExecuteSkarpaSQL
 import asyncio
 
-VERSION = '0.5.2'
+VERSION = '0.5.3'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.bouldering_score'
 INTERVAL = 600
@@ -125,7 +125,19 @@ def updater():
         SET true_diff = x.true_diff
         FROM x WHERE bld.id = x.boulder_id""")
     # Execute raw query updating difficulty coefficient for each boulder
-    ExecuteSkarpaSQLUpdate('WITH x AS (SELECT boulder_week_id, relative_diff AS diff1 FROM public."Boulder" WHERE level = 1) UPDATE public."Boulder" b SET diff_coeff = (1.0 + LN(1.0 - x.diff1 + (b.relative_diff + b.true_diff) * 0.5)) FROM x WHERE x.boulder_week_id = b.boulder_week_id')
+    ExecuteSkarpaSQLUpdate("""
+        WITH min_levels AS (
+            SELECT boulder_week_id, MIN(level) AS min_level
+            FROM public."Boulder"
+            GROUP BY boulder_week_id
+        ),
+        x AS (
+            SELECT b.boulder_week_id, relative_diff AS diff1 FROM public."Boulder" b
+            JOIN min_levels ml ON b.boulder_week_id = ml.boulder_week_id AND b.level = ml.min_level
+        )
+        UPDATE public."Boulder" b SET diff_coeff = (1.0 + LN(1.0 - x.diff1 + (b.relative_diff + b.true_diff) * 0.5))
+        FROM x WHERE x.boulder_week_id = b.boulder_week_id
+    """)
     # Execute raw query to calculate boulder week score data
     bw_data = ExecuteSkarpaSQL('SELECT b.boulder_week_id, bs.user_id, SUM(bs.score) AS score, SUM((bs.score * b.diff_coeff)) AS score_m, SUM(CAST(bs.is_top AS INTEGER)) AS tops, SUM(CAST(bs.is_flash AS INTEGER)) AS flashes FROM public."BoulderScore" bs LEFT JOIN public."Boulder" b ON bs.boulder_id = b.id GROUP BY b.boulder_week_id, bs.user_id')
     # Upsert BoulderWeekScore Table
