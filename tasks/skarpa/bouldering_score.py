@@ -8,7 +8,7 @@ from utils.linreg import LinearRegression
 from dingorm import ExecuteSkarpaSQLUpdate, ExecuteSkarpaSQL
 import asyncio
 
-VERSION = '0.5.3'
+VERSION = '0.5.4'
 CONNECTOR = '<DB>'
 NAME = 'skarpa.update.bouldering_score'
 INTERVAL = 600
@@ -74,8 +74,9 @@ def updatePlaceG(bouldering_scores : list[dict]):
 def generateProgressData(raw_bdata : list[list]):
     progress_data : list[list] = []
     for d in raw_bdata:
-        # Take progress_x and score_m
-        progress_data.append([d[0], d[2]])
+        if str(d[5]) != 'Kozaki':
+            # Take progress_x and score_m
+            progress_data.append([d[0], d[2]])
     return progress_data
 
 def sumDataColumn(raw_bdata : list[list], columnIndex: int):
@@ -154,7 +155,7 @@ def updater():
         b_scores : list[dict] = []
         for u in users:
             data = BoulderWeekScore.select(
-                filter=['bw.progress_x', 'bws.score', 'bws.score_m', 'bws.tops', 'bws.flashes'],
+                filter=['bw.progress_x', 'bws.score', 'bws.score_m', 'bws.tops', 'bws.flashes', 'bw.dates'],
                 where={"bws.user_id": u[0], "bw.competition_id": bc[0]},
                 join=['BoulderWeek']
             )
